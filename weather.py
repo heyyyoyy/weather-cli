@@ -35,7 +35,6 @@ class CityWeather:
         '''
         Получение температуры по городу
         '''
-        self.get_city_weather()
         if self.data is not None:
             # Перевод градусов из кельвинов в цельсии
             return int(self.data['main']['temp'] - 273.15)
