@@ -124,6 +124,7 @@ def weather_cli(city, km, file):
                     for city in cities_km
                 }
                 for future in concurrent.futures.as_completed(futures):
+                    city_average = {}
                     city = futures[future]
                     try:
                         temp, average_temp = future.result()
@@ -133,8 +134,11 @@ def weather_cli(city, km, file):
                             f'по городу {city}'
                         )
                     else:
-                        click.echo(f'Температура в {city}: {temp} C')
-                        click.echo(f'Средняя температура {average_temp:.2f}')
+                        city_average[city] = [temp, average_temp]
+                    sort(city_average, key=lambda obj: obj[1])
+                    for city, values in city_average.values(): 
+                        click.echo(f'Температура в {city}: {values[0]} C')
+                        click.echo(f'Средняя температура {values[1]:.2f}')
                         click.echo('---------------------------------------')
 
 
