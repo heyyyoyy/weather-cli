@@ -19,6 +19,9 @@ class CityWeather:
         self.data = self.get_city_weather()
 
     def get_city_weather(self):
+        '''
+        Получение данных по городу
+        '''
         params = {'q': self.city, 'appid': self.TOKEN}
         resp = requests.get(
             'http://api.openweathermap.org/data/2.5/weather',
@@ -29,12 +32,18 @@ class CityWeather:
             return data
 
     def get_temperature(self):
+        '''
+        Получение температуры по городу
+        '''
         self.get_city_weather()
         if self.data is not None:
             # Перевод градусов из кельвинов в цельсии
             return int(self.data['main']['temp'] - 273.15)
 
     def get_coordinates(self):
+        '''
+        Получение координат по городу
+        '''
         if self.data is not None:
             return self.data['coord']['lon'], self.data['coord']['lat']
 
@@ -54,6 +63,9 @@ class CityWeather:
         return f'{lon_left},{lat_bottom},{lon_right},{lat_top}'
 
     def get_area_weather(self, coordinates):
+        '''
+        Получение данных по координатам
+        '''
         params = {'bbox': f'{coordinates},10', 'appid': self.TOKEN}
         resp = requests.get(
             'http://api.openweathermap.org/data/2.5/box/city',
@@ -64,6 +76,9 @@ class CityWeather:
             return data
 
     def get_average_temp(self, lon, lat):
+        '''
+        Получение средней температру в заданном квадрате
+        '''
         coordinates = self.prepare_coordinates(lon, lat)
         data = self.get_area_weather(coordinates)
         if data:
