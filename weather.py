@@ -135,7 +135,7 @@ def weather_cli(city, km, file):
                         )
                     else:
                         city_average[city] = [temp, average_temp]
-                    sort(city_average, key=lambda obj: obj[1])
+                    sort(city_average, key=lambda obj: -obj[1])
                     for city, values in city_average.values(): 
                         click.echo(f'Температура в {city}: {values[0]} C')
                         click.echo(f'Средняя температура {values[1]:.2f}')
