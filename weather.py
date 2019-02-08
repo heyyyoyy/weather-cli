@@ -3,6 +3,7 @@ from math import cos
 import click
 from dotenv import load_dotenv
 import os
+import sys
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,6 +16,7 @@ class CityWeather:
     def __init__(self, city, kilometers):
         self.city = city
         self.kilometers = kilometers
+        self.data = self.get_city_weather()
 
     def get_city_weather(self):
         params = {'q': self.city, 'appid': self.TOKEN}
@@ -26,22 +28,15 @@ class CityWeather:
         if data['cod'] == 200:
             return data
 
-    def get_temperature(self, data):
-        # Перевод градусов из кельвинов в цельсии
-        return int(data['main']['temp'] - 273.15)
+    def get_temperature(self):
+        self.get_city_weather()
+        if self.data is not None:
+            # Перевод градусов из кельвинов в цельсии
+            return int(self.data['main']['temp'] - 273.15)
 
-    def get_coordinates(self, data):
-        return data['coord']['lon'], data['coord']['lat']
-
-    def get_info(self):
-        data = self.get_city_weather()
-        if data is not None:
-            temp = self.get_temperature(data)
-            lon, lat = self.get_coordinates(data)
-            coordinates = self.prepare_coordinates(lon, lat)
-            average_temp = self.get_average_temp(coordinates)
-            return temp, average_temp
-            return f'Температура в {self.city}: {temp} C'
+    def get_coordinates(self):
+        if self.data is not None:
+            return self.data['coord']['lon'], self.data['coord']['lat']
 
     def prepare_coordinates(self, lon, lat):
         '''
@@ -65,15 +60,31 @@ class CityWeather:
             params=params
         )
         data = resp.json()
-        if data['cod'] == 200:
+        if data and data['cod'] == 200:
             return data
 
-    def get_average_temp(self, coordinates):
+    def get_average_temp(self, lon, lat):
+        coordinates = self.prepare_coordinates(lon, lat)
         data = self.get_area_weather(coordinates)
-        if data is not None:
+        if data:
             cities = [int(city['main']['temp']) for city in data['list']]
             average_temp = sum(cities) / len(cities)
             return average_temp
+
+
+def pipeline(city, km):
+    city = CityWeather(city, km)
+    temp = city.get_temperature()
+    if temp is None:
+        click.echo(f'{city.city} - Неверно указан город')
+        return city.city, None, None
+    coordinates = city.get_coordinates()
+    average_temp = city.get_average_temp(*coordinates)
+    if average_temp is None:
+        click.echo(f'{city.city} - Укажите большее расстояние')
+        return city.city, temp, None
+
+    return city.city, temp, average_temp
 
 
 @click.command()
@@ -99,47 +110,37 @@ def weather_cli(city, km, file):
     weather --file cities.txt
     '''
     if file is None:
-        city = CityWeather(city, km)
-        try:
-            temp, average_temp = city.get_info()
-        except TypeError:
-            click.echo(
-                'Произошла ошибка во время выполнения, '
-                'укажите корректные данные'
-            )
-        else:
-            click.echo(f'Температура в {city.city}: {temp} C')
-            click.echo(f'Средняя температура {average_temp:.2f}')
+        city, temp, average_temp = pipeline(city, km)
+        if temp is None:
+            sys.exit(1)
+        if average_temp is None:
+            sys.exit(1)
+
+        click.echo(f'Температура в {city}: {temp} C')
+        click.echo(f'Средняя температура {average_temp:.2f}')
     else:
         with open(file) as f:
             data = f.read().splitlines()
             city_km = (line.split(':') for line in data)
+            city_average = []
+
             with ThreadPoolExecutor(5) as pool:
-                cities_km = (
-                    CityWeather(city[0], int(city[1]))
-                    for city in city_km
-                )
                 futures = {
-                    pool.submit(city.get_info): city.city
-                    for city in cities_km
+                    pool.submit(pipeline, city, int(km))
+                    for city, km in city_km
                 }
                 for future in concurrent.futures.as_completed(futures):
-                    city_average = {}
-                    city = futures[future]
-                    try:
-                        temp, average_temp = future.result()
-                    except Exception:
-                        click.echo(
-                            f'Произошла ошибка во время запроса '
-                            f'по городу {city}'
-                        )
-                    else:
-                        city_average[city] = [temp, average_temp]
-                    sort(city_average, key=lambda obj: -obj[1])
-                    for city, values in city_average.values(): 
-                        click.echo(f'Температура в {city}: {values[0]} C')
-                        click.echo(f'Средняя температура {values[1]:.2f}')
-                        click.echo('---------------------------------------')
+                    result = future.result()
+
+                    if all(result):
+                        city_average.append(result)
+
+            city_average.sort(key=lambda lst: lst[-1])
+
+            for city, temp, avr in city_average:
+                click.echo(f'Температура в {city}: {temp} C')
+                click.echo(f'Средняя температура {avr:.2f}')
+                click.echo('---------------------------------------')
 
 
 if __name__ == "__main__":
